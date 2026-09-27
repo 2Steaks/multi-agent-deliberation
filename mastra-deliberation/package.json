@@ -1,0 +1,21 @@
+{
+  "name": "mastra-deliberation",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "mastra dev",
+    "deliberate": "tsx --env-file=.env src/run.ts"
+  },
+  "dependencies": {
+    "@mastra/core": "latest",
+    "@mastra/observability": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "mastra": "latest"
+  }
+}

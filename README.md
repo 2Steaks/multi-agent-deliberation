@@ -66,12 +66,8 @@ yourself to see the whole thing.)
 
 ## Trace screenshot
 
-_Run `npm run dev`, open http://localhost:4111, run the `deliberation`
-workflow from Studio (or via `npm run deliberate` in another terminal, then
-refresh Studio's trace list), and drop a screenshot of the expanded trace
-here — you should see one `workflow run: 'deliberation'` trace containing a
-`parallel: '5 branches'` span with all five specialist agent runs nested
-under it, starting within milliseconds of each other._
+<img width="1103" height="653" alt="Screenshot 2026-09-27 at 21 04 11" src="https://github.com/user-attachments/assets/a207980b-7e2f-413b-a9f2-7b1f8be864b3" />
+
 
 ## What I noticed
 

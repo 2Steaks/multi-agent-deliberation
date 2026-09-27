@@ -20,10 +20,10 @@ function specialistStep<Id extends string>(
     id,
     inputSchema: problemInputSchema,
     outputSchema: specialistViewSchema,
-    execute: async ({ inputData }) => {
+    execute: async ({ inputData, tracingContext }) => {
       const response = await agent.generate(
         `Problem:\n${inputData.problem}\n\nRespond as the ${id} specialist.`,
-        { structuredOutput: { schema: specialistViewSchema } },
+        { structuredOutput: { schema: specialistViewSchema }, tracingContext },
       );
       return response.object;
     },
@@ -46,11 +46,11 @@ const synthesizeStep = createStep({
     skeptic: specialistViewSchema,
   }),
   outputSchema: synthesisSchema,
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData, tracingContext }) => {
     const views = Object.values(inputData);
     const response = await synthesizerAgent.generate(
       `Here are five specialist views on the same problem, as JSON:\n${JSON.stringify(views, null, 2)}\n\nProduce the synthesis.`,
-      { structuredOutput: { schema: synthesisSchema } },
+      { structuredOutput: { schema: synthesisSchema }, tracingContext },
     );
     return response.object;
   },

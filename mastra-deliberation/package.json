@@ -9,13 +9,14 @@
   },
   "dependencies": {
     "@mastra/core": "latest",
+    "@mastra/libsql": "^1.23.3",
     "@mastra/observability": "latest",
     "zod": "latest"
   },
   "devDependencies": {
-    "typescript": "latest",
     "@types/node": "latest",
+    "mastra": "latest",
     "tsx": "latest",
-    "mastra": "latest"
+    "typescript": "latest"
   }
 }

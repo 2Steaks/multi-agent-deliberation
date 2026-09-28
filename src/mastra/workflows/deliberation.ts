@@ -8,7 +8,11 @@ import {
   uxAgent,
 } from "../agents/specialists";
 import { synthesizerAgent } from "../agents/synthesizer";
-import { buildSpecialistPrompt, buildSynthesisPrompt, SPECIALIST_IDS } from "../prompts";
+import {
+  buildSpecialistPrompt,
+  buildSynthesisPrompt,
+  SPECIALIST_IDS,
+} from "../prompts";
 import { specialistViewSchema, synthesisSchema } from "../schemas";
 
 const problemInputSchema = z.object({ problem: z.string() });
@@ -23,10 +27,14 @@ function specialistStep<Id extends string>(
     outputSchema: specialistViewSchema,
     retries: 2,
     execute: async ({ inputData, tracingContext }) => {
-      const response = await agent.generate(buildSpecialistPrompt(id, inputData.problem), {
-        structuredOutput: { schema: specialistViewSchema },
-        tracingContext,
-      });
+      const response = await agent.generate(
+        buildSpecialistPrompt(id, inputData.problem),
+        {
+          structuredOutput: { schema: specialistViewSchema },
+          tracingContext,
+        },
+      );
+
       return response.object;
     },
   });
@@ -51,10 +59,14 @@ const synthesizeStep = createStep({
   retries: 2,
   execute: async ({ inputData, tracingContext }) => {
     const views = SPECIALIST_IDS.map((id) => inputData[id]);
-    const response = await synthesizerAgent.generate(buildSynthesisPrompt(views), {
-      structuredOutput: { schema: synthesisSchema },
-      tracingContext,
-    });
+    const response = await synthesizerAgent.generate(
+      buildSynthesisPrompt(views),
+      {
+        structuredOutput: { schema: synthesisSchema },
+        tracingContext,
+      },
+    );
+
     return response.object;
   },
 });

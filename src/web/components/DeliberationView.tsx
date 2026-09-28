@@ -19,7 +19,12 @@ interface DeliberationViewProps {
   onRetrySynthesis: () => void;
 }
 
-export function DeliberationView({ snapshot, onReset, onRetrySpecialist, onRetrySynthesis }: DeliberationViewProps) {
+export function DeliberationView({
+  snapshot,
+  onReset,
+  onRetrySpecialist,
+  onRetrySynthesis,
+}: DeliberationViewProps) {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 pb-16">
       <div className="mb-6 border-b border-zinc-200 pb-4">
@@ -37,21 +42,32 @@ export function DeliberationView({ snapshot, onReset, onRetrySpecialist, onRetry
       </div>
 
       {snapshot.status === "error" ? (
-        <RunError message={snapshot.error ?? "The deliberation could not be completed."} onReset={onReset} />
+        <RunError
+          message={snapshot.error ?? "The deliberation could not be completed."}
+          onReset={onReset}
+        />
       ) : (
         <>
-          <div className="grid grid-cols-2 items-start gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-4">
             {snapshot.specialists.map((specialist) => (
-              <SpecialistCard key={specialist.id} specialist={specialist} onRetry={onRetrySpecialist} />
+              <SpecialistCard
+                key={specialist.id}
+                specialist={specialist}
+                onRetry={onRetrySpecialist}
+              />
             ))}
           </div>
 
           {snapshot.synthesis.status !== "idle" && (
             <div className="mt-10">
-              {snapshot.synthesis.status === "synthesizing" && <SynthesizingIndicator />}
+              {snapshot.synthesis.status === "synthesizing" && (
+                <SynthesizingIndicator />
+              )}
               {snapshot.synthesis.status === "error" && (
                 <SynthesisError
-                  message={snapshot.synthesis.error ?? "Synthesis failed to complete."}
+                  message={
+                    snapshot.synthesis.error ?? "Synthesis failed to complete."
+                  }
                   onRetry={onRetrySynthesis}
                 />
               )}

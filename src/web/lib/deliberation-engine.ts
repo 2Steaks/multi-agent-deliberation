@@ -1,8 +1,16 @@
 import { SPECIALIST_DEFINITIONS } from "./specialists";
-import type { DeliberationSnapshot, SpecialistId, SpecialistState, SpecialistView, Synthesis } from "./types";
+import type {
+  DeliberationSnapshot,
+  SpecialistId,
+  SpecialistState,
+  SpecialistView,
+  Synthesis,
+} from "./types";
 
 const SYNTHESIZE_STEP_ID = "synthesize";
-const SPECIALIST_IDS = new Set<string>(SPECIALIST_DEFINITIONS.map((def) => def.id));
+const SPECIALIST_IDS = new Set<string>(
+  SPECIALIST_DEFINITIONS.map((def) => def.id),
+);
 
 function isSpecialistId(id: string): id is SpecialistId {
   return SPECIALIST_IDS.has(id);
@@ -38,20 +46,30 @@ export interface CreateDeliberationRunParams {
   /** Given the problem, streams the real workflow run's events. */
   streamRun: (problem: string) => AsyncIterable<WorkflowStreamChunk>;
   /** Calls one specialist's agent directly, bypassing the (concluded) workflow run. */
-  retrySpecialistCall: (id: SpecialistId, problem: string) => Promise<SpecialistView>;
+  retrySpecialistCall: (
+    id: SpecialistId,
+    problem: string,
+  ) => Promise<SpecialistView>;
   /** Calls the synthesizer agent directly with the five specialists' results. */
-  runSynthesisCall: (views: Record<SpecialistId, SpecialistView>) => Promise<Synthesis>;
+  runSynthesisCall: (
+    views: Record<SpecialistId, SpecialistView>,
+  ) => Promise<Synthesis>;
 }
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-function messageFromChunk(chunk: WorkflowStreamChunk, fallback: string): string {
+function messageFromChunk(
+  chunk: WorkflowStreamChunk,
+  fallback: string,
+): string {
   return chunk.payload?.error?.message || fallback;
 }
 
-export function createDeliberationRun(params: CreateDeliberationRunParams): DeliberationRun {
+export function createDeliberationRun(
+  params: CreateDeliberationRunParams,
+): DeliberationRun {
   const { problem, streamRun, retrySpecialistCall, runSynthesisCall } = params;
   const listeners = new Set<() => void>();
   const startedAt = new Map<SpecialistId, number>();
@@ -90,57 +108,101 @@ export function createDeliberationRun(params: CreateDeliberationRunParams): Deli
     });
   }
 
-  function completeSpecialist(id: SpecialistId, result: SpecialistView, durationMs: number) {
-    updateSpecialist(id, { status: "complete", result, durationMs, error: null });
+  function completeSpecialist(
+    id: SpecialistId,
+    result: SpecialistView,
+    durationMs: number,
+  ) {
+    updateSpecialist(id, {
+      status: "complete",
+      result,
+      durationMs,
+      error: null,
+    });
   }
 
   function buildViewsRecord(): Record<SpecialistId, SpecialistView> {
     const record = {} as Record<SpecialistId, SpecialistView>;
+
     for (const specialist of snapshot.specialists) {
       if (specialist.result) record[specialist.id] = specialist.result;
     }
+
     return record;
   }
 
   function maybeStartRecoverySynthesis() {
     if (snapshot.synthesis.status !== "idle") return;
-    if (!snapshot.specialists.every((specialist) => specialist.status === "complete")) return;
+    if (
+      !snapshot.specialists.every(
+        (specialist) => specialist.status === "complete",
+      )
+    )
+      return;
     runSynthesis();
   }
 
   function runSynthesis() {
-    setSnapshot({ ...snapshot, status: "synthesizing", synthesis: { status: "synthesizing", result: null, error: null } });
+    setSnapshot({
+      ...snapshot,
+      status: "synthesizing",
+      synthesis: { status: "synthesizing", result: null, error: null },
+    });
+
     runSynthesisCall(buildViewsRecord()).then(
       (result) => {
         if (disposed) return;
-        setSnapshot({ ...snapshot, status: "done", synthesis: { status: "done", result, error: null } });
+
+        setSnapshot({
+          ...snapshot,
+          status: "done",
+          synthesis: { status: "done", result, error: null },
+        });
       },
       (error) => {
         if (disposed) return;
-        setSnapshot({ ...snapshot, synthesis: { status: "error", result: null, error: messageFrom(error) } });
+
+        setSnapshot({
+          ...snapshot,
+          synthesis: {
+            status: "error",
+            result: null,
+            error: messageFrom(error),
+          },
+        });
       },
     );
   }
 
   function handleChunk(chunk: WorkflowStreamChunk) {
     const id = chunk.payload?.id;
+
     if (!id) return;
 
     if (chunk.type === "workflow-step-start") {
       if (isSpecialistId(id)) {
         const specialist = snapshot.specialists.find((s) => s.id === id);
+
         if (specialist && specialist.status !== "thinking") {
           startedAt.set(id, Date.now());
           updateSpecialist(id, { status: "thinking", error: null });
         }
-      } else if (id === SYNTHESIZE_STEP_ID && snapshot.synthesis.status !== "synthesizing") {
-        setSnapshot({ ...snapshot, status: "synthesizing", synthesis: { status: "synthesizing", result: null, error: null } });
+      } else if (
+        id === SYNTHESIZE_STEP_ID &&
+        snapshot.synthesis.status !== "synthesizing"
+      ) {
+        setSnapshot({
+          ...snapshot,
+          status: "synthesizing",
+          synthesis: { status: "synthesizing", result: null, error: null },
+        });
       }
       return;
     }
 
     if (chunk.type === "workflow-step-result") {
       const succeeded = chunk.payload?.status === "success";
+
       if (isSpecialistId(id)) {
         if (succeeded) {
           // Not checked here: while the stream is still live, "all five complete"
@@ -148,21 +210,40 @@ export function createDeliberationRun(params: CreateDeliberationRunParams): Deli
           // finalizeAfterStreamEnd() (stream concluded) and a successful retry
           // (which only happens post-conclusion) know that for certain.
           const duration = Date.now() - (startedAt.get(id) ?? Date.now());
-          completeSpecialist(id, chunk.payload?.output as SpecialistView, duration);
+
+          completeSpecialist(
+            id,
+            chunk.payload?.output as SpecialistView,
+            duration,
+          );
         } else {
-          updateSpecialist(id, { status: "error", error: messageFromChunk(chunk, "This specialist failed to complete.") });
+          updateSpecialist(id, {
+            status: "error",
+            error: messageFromChunk(
+              chunk,
+              "This specialist failed to complete.",
+            ),
+          });
         }
       } else if (id === SYNTHESIZE_STEP_ID) {
         if (succeeded) {
           setSnapshot({
             ...snapshot,
             status: "done",
-            synthesis: { status: "done", result: chunk.payload?.output as Synthesis, error: null },
+            synthesis: {
+              status: "done",
+              result: chunk.payload?.output as Synthesis,
+              error: null,
+            },
           });
         } else {
           setSnapshot({
             ...snapshot,
-            synthesis: { status: "error", result: null, error: messageFromChunk(chunk, "Synthesis failed to complete.") },
+            synthesis: {
+              status: "error",
+              result: null,
+              error: messageFromChunk(chunk, "Synthesis failed to complete."),
+            },
           });
         }
       }
@@ -170,12 +251,16 @@ export function createDeliberationRun(params: CreateDeliberationRunParams): Deli
   }
 
   function finalizeAfterStreamEnd(streamError?: unknown) {
-    const anySpecialistSucceeded = snapshot.specialists.some((s) => s.status === "complete");
+    const anySpecialistSucceeded = snapshot.specialists.some(
+      (s) => s.status === "complete",
+    );
     if (!anySpecialistSucceeded) {
       setSnapshot({
         ...snapshot,
         status: "error",
-        error: streamError ? messageFrom(streamError) : "The deliberation could not be completed.",
+        error: streamError
+          ? messageFrom(streamError)
+          : "The deliberation could not be completed.",
       });
       return;
     }
@@ -184,12 +269,20 @@ export function createDeliberationRun(params: CreateDeliberationRunParams): Deli
       ...snapshot,
       specialists: snapshot.specialists.map((specialist) =>
         specialist.status === "waiting" || specialist.status === "thinking"
-          ? { ...specialist, status: "error" as const, error: "This specialist did not complete." }
+          ? {
+              ...specialist,
+              status: "error" as const,
+              error: "This specialist did not complete.",
+            }
           : specialist,
       ),
       synthesis:
         snapshot.synthesis.status === "synthesizing"
-          ? { status: "error", result: null, error: "Synthesis did not complete." }
+          ? {
+              status: "error",
+              result: null,
+              error: "Synthesis did not complete.",
+            }
           : snapshot.synthesis,
     });
     maybeStartRecoverySynthesis();
@@ -230,7 +323,11 @@ export function createDeliberationRun(params: CreateDeliberationRunParams): Deli
       retrySpecialistCall(id, problem).then(
         (result) => {
           if (disposed) return;
-          completeSpecialist(id, result, Date.now() - (startedAt.get(id) ?? Date.now()));
+          completeSpecialist(
+            id,
+            result,
+            Date.now() - (startedAt.get(id) ?? Date.now()),
+          );
           maybeStartRecoverySynthesis();
         },
         (error) => {

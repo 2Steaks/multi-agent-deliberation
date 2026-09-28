@@ -22,7 +22,9 @@ export function SpecialistCard({ specialist, onRetry }: SpecialistCardProps) {
   return (
     <div className="flex flex-col rounded-lg border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-zinc-900">{specialist.role}</span>
+        <span className="text-sm font-semibold text-zinc-900">
+          {specialist.role}
+        </span>
         <StatusIndicator status={specialist.status} />
       </div>
       <p className="mt-0.5 text-xs text-zinc-500">{specialist.description}</p>
@@ -32,7 +34,7 @@ export function SpecialistCard({ specialist, onRetry }: SpecialistCardProps) {
           type="button"
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
-          className="mt-3 flex w-full flex-col text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+          className="cursor-pointer mt-3 flex w-full flex-col text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
         >
           <div className="flex items-center gap-2">
             <span
@@ -40,15 +42,21 @@ export function SpecialistCard({ specialist, onRetry }: SpecialistCardProps) {
             >
               {specialist.result.stance}
             </span>
-            <span className="text-xs text-zinc-500">{formatDuration(specialist.durationMs ?? 0)}</span>
+            <span className="text-xs text-zinc-500">
+              {formatDuration(specialist.durationMs ?? 0)}
+            </span>
           </div>
-          <p className="mt-2 line-clamp-2 text-sm text-zinc-600">{specialist.result.keyPoints[0]}</p>
+          <p className="mt-2 line-clamp-2 text-sm text-zinc-600">
+            {specialist.result.keyPoints[0]}
+          </p>
         </button>
       )}
 
       {specialist.status === "error" && (
         <div className="mt-3">
-          <p className="text-sm text-rose-600">{specialist.error ?? "This specialist failed to complete."}</p>
+          <p className="text-sm text-rose-600">
+            {specialist.error ?? "This specialist failed to complete."}
+          </p>
           <button
             type="button"
             onClick={() => onRetry(specialist.id)}
@@ -74,7 +82,9 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
   return (
     <div>
-      <h4 className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">{title}</h4>
+      <h4 className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        {title}
+      </h4>
       <ul className="mt-1.5 space-y-1.5 text-zinc-600">
         {items.map((item, index) => (
           <li key={index} className="flex gap-2">
@@ -112,8 +122,19 @@ function StatusIndicator({ status }: { status: SpecialistState["status"] }) {
 
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-      <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

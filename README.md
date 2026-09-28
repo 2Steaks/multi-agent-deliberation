@@ -61,10 +61,6 @@ billing decision):
 }
 ```
 
-(Full output — six agreement points, three disagreement clusters, seven open
-questions, six kill conditions — is longer; trimmed here for space. Run it
-yourself to see the whole thing.)
-
 ## Trace screenshot
 
 <img width="1103" height="653" alt="Screenshot 2026-09-27 at 21 04 11" src="https://github.com/user-attachments/assets/a207980b-7e2f-413b-a9f2-7b1f8be864b3" />

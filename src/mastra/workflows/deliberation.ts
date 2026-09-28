@@ -8,6 +8,7 @@ import {
   uxAgent,
 } from "../agents/specialists";
 import { synthesizerAgent } from "../agents/synthesizer";
+import { buildSpecialistPrompt, buildSynthesisPrompt, SPECIALIST_IDS } from "../prompts";
 import { specialistViewSchema, synthesisSchema } from "../schemas";
 
 const problemInputSchema = z.object({ problem: z.string() });
@@ -20,11 +21,12 @@ function specialistStep<Id extends string>(
     id,
     inputSchema: problemInputSchema,
     outputSchema: specialistViewSchema,
+    retries: 2,
     execute: async ({ inputData, tracingContext }) => {
-      const response = await agent.generate(
-        `Problem:\n${inputData.problem}\n\nRespond as the ${id} specialist.`,
-        { structuredOutput: { schema: specialistViewSchema }, tracingContext },
-      );
+      const response = await agent.generate(buildSpecialistPrompt(id, inputData.problem), {
+        structuredOutput: { schema: specialistViewSchema },
+        tracingContext,
+      });
       return response.object;
     },
   });
@@ -46,12 +48,13 @@ const synthesizeStep = createStep({
     skeptic: specialistViewSchema,
   }),
   outputSchema: synthesisSchema,
+  retries: 2,
   execute: async ({ inputData, tracingContext }) => {
-    const views = Object.values(inputData);
-    const response = await synthesizerAgent.generate(
-      `Here are five specialist views on the same problem, as JSON:\n${JSON.stringify(views, null, 2)}\n\nProduce the synthesis.`,
-      { structuredOutput: { schema: synthesisSchema }, tracingContext },
-    );
+    const views = SPECIALIST_IDS.map((id) => inputData[id]);
+    const response = await synthesizerAgent.generate(buildSynthesisPrompt(views), {
+      structuredOutput: { schema: synthesisSchema },
+      tracingContext,
+    });
     return response.object;
   },
 });
@@ -61,6 +64,7 @@ export const deliberationWorkflow = createWorkflow({
   inputSchema: problemInputSchema,
   outputSchema: synthesisSchema,
 })
+  // Order must match SPECIALIST_IDS in ../prompts.
   .parallel([engineerStep, productStep, uxStep, customerStep, skepticStep])
   .then(synthesizeStep)
   .commit();

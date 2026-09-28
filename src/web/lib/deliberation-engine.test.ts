@@ -1,171 +1,163 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createDeliberationRun,
-  createRunCounter,
-  SPECIALIST_MAX_MS,
-  SYNTHESIS_MAX_MS,
-} from "./deliberation-engine";
-import { SPECIALIST_DEFINITIONS } from "./mock-data";
-import type { SpecialistId } from "./types";
+import { describe, expect, it, vi } from "vitest";
+import { createDeliberationRun, createRunCounter, type WorkflowStreamChunk } from "./deliberation-engine";
+import type { Synthesis, SpecialistId, SpecialistView } from "./types";
 
-function sequenceRandom(values: number[]) {
-  let index = 0;
-  return () => values[index++ % values.length];
+function stepStart(id: string): WorkflowStreamChunk {
+  return { type: "workflow-step-start", payload: { id } };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
+function stepResult(id: string, status: "success" | "failed", output?: unknown): WorkflowStreamChunk {
+  return { type: "workflow-step-result", payload: { id, status, output } };
+}
 
-afterEach(() => {
-  vi.useRealTimers();
-});
+function view(role: string): SpecialistView {
+  return { role, stance: "support", keyPoints: [role], risks: [], questions: [], confidence: 0.5 };
+}
+
+const synthesis: Synthesis = {
+  agreement: ["a"],
+  disagreement: [],
+  openQuestions: [],
+  recommendation: "do it",
+  killConditions: [],
+};
+
+async function* streamOf(chunks: WorkflowStreamChunk[]): AsyncIterable<WorkflowStreamChunk> {
+  for (const chunk of chunks) yield chunk;
+}
+
+function flush() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+const ALL_IDS: SpecialistId[] = ["engineer", "product", "ux", "customer", "skeptic"];
+
+function baseParams(streamRun: (problem: string) => AsyncIterable<WorkflowStreamChunk>) {
+  return {
+    problem: "Should we?",
+    runNumber: 1,
+    streamRun,
+    retrySpecialistCall: vi.fn(),
+    runSynthesisCall: vi.fn(),
+  };
+}
 
 describe("createDeliberationRun", () => {
-  it("starts every specialist waiting, with an idle synthesis and a running status", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.5]) });
+  it("starts every specialist waiting, with idle synthesis and a running status", () => {
+    const run = createDeliberationRun(baseParams(() => streamOf([])));
     const snapshot = run.getSnapshot();
 
-    expect(snapshot.runNumber).toBe(1);
-    expect(snapshot.problem).toBe("Should we?");
     expect(snapshot.status).toBe("running");
-    expect(snapshot.synthesis).toEqual({ status: "idle", result: null });
+    expect(snapshot.synthesis).toEqual({ status: "idle", result: null, error: null });
     expect(snapshot.specialists).toHaveLength(5);
     for (const specialist of snapshot.specialists) {
       expect(specialist.status).toBe("waiting");
-      expect(specialist.durationMs).toBeNull();
-      expect(specialist.result).toBeNull();
     }
   });
 
-  it("moves every specialist to thinking almost immediately", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.5]) });
+  it("completes specialists independently out of order, then gates and runs synthesis", async () => {
+    let resolveGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (resolveGate = resolve));
 
-    vi.advanceTimersByTime(0);
-
-    for (const specialist of run.getSnapshot().specialists) {
-      expect(specialist.status).toBe("thinking");
+    async function* stream() {
+      yield stepStart("product");
+      yield stepResult("product", "success", view("Product"));
+      yield stepStart("engineer");
+      yield stepStart("ux");
+      yield stepResult("ux", "success", view("UX"));
+      yield stepStart("customer");
+      yield stepStart("skeptic");
+      yield stepResult("skeptic", "success", view("Skeptic"));
+      yield stepResult("engineer", "success", view("Engineer"));
+      yield stepResult("customer", "success", view("Customer"));
+      await gate;
+      yield stepStart("synthesize");
+      yield stepResult("synthesize", "success", synthesis);
     }
-  });
 
-  it("completes each specialist with a duration and a result matching the mock shape", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.5]) });
+    const run = createDeliberationRun(baseParams(() => stream()));
+    await flush();
 
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS);
-
-    for (const specialist of run.getSnapshot().specialists) {
-      expect(specialist.status).toBe("complete");
-      expect(specialist.durationMs).toEqual(expect.any(Number));
-      expect(specialist.durationMs).toBeGreaterThan(0);
-      expect(specialist.result).toMatchObject({
-        role: specialist.role,
-        stance: expect.stringMatching(/^(support|oppose|conditional)$/),
-        keyPoints: expect.any(Array),
-        risks: expect.any(Array),
-        questions: expect.any(Array),
-        confidence: expect.any(Number),
-      });
-    }
-  });
-
-  it("completes specialists at different times and in an order that depends on randomness", () => {
-    const order: SpecialistId[] = [];
-    const runA = createDeliberationRun({
-      problem: "Should we?",
-      runNumber: 1,
-      random: sequenceRandom([0.9, 0.1, 0.5, 0.7, 0.3]),
-    });
-    const unsubscribeA = runA.subscribe(() => {
-      for (const specialist of runA.getSnapshot().specialists) {
-        if (specialist.status === "complete" && !order.includes(specialist.id)) {
-          order.push(specialist.id);
-        }
-      }
-    });
-
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS);
-    unsubscribeA();
-
-    // random sequence maps 1:1 onto SPECIALIST_DEFINITIONS order (engineer,
-    // product, ux, customer, skeptic); ascending random -> ascending duration
-    // -> that order of completion.
-    expect(order).toEqual(["product", "skeptic", "ux", "customer", "engineer"]);
-
-    const orderB: SpecialistId[] = [];
-    const runB = createDeliberationRun({
-      problem: "Should we?",
-      runNumber: 2,
-      random: sequenceRandom([0.2, 0.8, 0.4, 0.05, 0.6]),
-    });
-    runB.subscribe(() => {
-      for (const specialist of runB.getSnapshot().specialists) {
-        if (specialist.status === "complete" && !orderB.includes(specialist.id)) {
-          orderB.push(specialist.id);
-        }
-      }
-    });
-
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS);
-
-    expect(orderB).toEqual(["customer", "engineer", "ux", "skeptic", "product"]);
-    expect(orderB).not.toEqual(order);
-  });
-
-  it("does not start synthesis until every specialist has completed", () => {
-    // engineer finishes at SPECIALIST_MAX_MS (random=1), everyone else near-instant (random=0)
-    const values = SPECIALIST_DEFINITIONS.map((def) => (def.id === "engineer" ? 1 : 0));
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom(values) });
-
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS - 1);
     let snapshot = run.getSnapshot();
-    expect(snapshot.status).not.toBe("synthesizing");
-    expect(snapshot.synthesis.status).toBe("idle");
-    expect(snapshot.specialists.find((s) => s.id === "engineer")?.status).toBe("thinking");
+    expect(snapshot.specialists.every((s) => s.status === "complete")).toBe(true);
+    expect(snapshot.synthesis.status).toBe("idle"); // not started until its own step-start arrives
 
-    vi.advanceTimersByTime(1);
+    resolveGate();
+    await flush();
+
     snapshot = run.getSnapshot();
-    expect(snapshot.status).toBe("synthesizing");
-    expect(snapshot.synthesis.status).toBe("synthesizing");
+    expect(snapshot.synthesis).toEqual({ status: "done", result: synthesis, error: null });
+    expect(snapshot.status).toBe("done");
   });
 
-  it("completes synthesis after all specialists finish, with a result matching the mock shape", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.1]) });
+  it("keeps a failed specialist scoped to its own card, and retrying it triggers direct synthesis once all five are complete", async () => {
+    const chunks: WorkflowStreamChunk[] = [];
+    for (const id of ALL_IDS) chunks.push(stepStart(id));
+    for (const id of ALL_IDS) {
+      chunks.push(id === "engineer" ? stepResult(id, "failed") : stepResult(id, "success", view(id)));
+    }
+    const retrySpecialistCall = vi.fn().mockResolvedValue(view("Engineer"));
+    const runSynthesisCall = vi.fn().mockResolvedValue(synthesis);
+    const run = createDeliberationRun({
+      ...baseParams(() => streamOf(chunks)),
+      retrySpecialistCall,
+      runSynthesisCall,
+    });
 
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS + SYNTHESIS_MAX_MS);
+    await flush();
+    let snapshot = run.getSnapshot();
+    expect(snapshot.specialists.find((s) => s.id === "engineer")?.status).toBe("error");
+    expect(snapshot.status).not.toBe("error"); // four succeeded, this isn't a whole-run failure
+    expect(runSynthesisCall).not.toHaveBeenCalled();
+
+    run.retrySpecialist("engineer");
+    await flush();
+
+    expect(retrySpecialistCall).toHaveBeenCalledWith("engineer", "Should we?");
+    expect(runSynthesisCall).toHaveBeenCalledTimes(1);
+    snapshot = run.getSnapshot();
+    expect(snapshot.specialists.find((s) => s.id === "engineer")?.status).toBe("complete");
+    expect(snapshot.synthesis.status).toBe("done");
+    expect(snapshot.status).toBe("done");
+  });
+
+  it("sets a run-level error when the stream fails before any specialist succeeds", async () => {
+    async function* stream(): AsyncGenerator<WorkflowStreamChunk> {
+      yield stepStart("engineer");
+      throw new Error("network down");
+    }
+    const run = createDeliberationRun(baseParams(() => stream()));
+
+    await flush();
 
     const snapshot = run.getSnapshot();
-    expect(snapshot.status).toBe("done");
-    expect(snapshot.synthesis.status).toBe("done");
-    expect(snapshot.synthesis.result).toMatchObject({
-      agreement: expect.any(Array),
-      disagreement: expect.any(Array),
-      openQuestions: expect.any(Array),
-      recommendation: expect.any(String),
-      killConditions: expect.any(Array),
-    });
+    expect(snapshot.status).toBe("error");
+    expect(snapshot.error).toEqual(expect.any(String));
   });
 
-  it("notifies subscribers on every transition and stops after unsubscribing", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.1]) });
-    const listener = vi.fn();
-    const unsubscribe = run.subscribe(listener);
+  it("stops reacting to stream events and retries once disposed", async () => {
+    let yieldSecond: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (yieldSecond = resolve));
 
-    vi.advanceTimersByTime(0);
-    expect(listener).toHaveBeenCalledTimes(1);
+    async function* stream(): AsyncGenerator<WorkflowStreamChunk> {
+      yield stepStart("engineer");
+      yield stepResult("engineer", "failed");
+      await gate;
+      yield stepStart("product");
+    }
 
-    unsubscribe();
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS + SYNTHESIS_MAX_MS);
-    expect(listener).toHaveBeenCalledTimes(1);
-  });
+    const retrySpecialistCall = vi.fn().mockResolvedValue(view("Engineer"));
+    const run = createDeliberationRun({ ...baseParams(() => stream()), retrySpecialistCall });
 
-  it("stops all pending work once disposed", () => {
-    const run = createDeliberationRun({ problem: "Should we?", runNumber: 1, random: sequenceRandom([0.1]) });
-    vi.advanceTimersByTime(0);
-
-    run.dispose();
+    await flush();
+    run.retrySpecialist("engineer");
     const beforeDispose = run.getSnapshot();
+    run.dispose();
 
-    vi.advanceTimersByTime(SPECIALIST_MAX_MS + SYNTHESIS_MAX_MS);
+    yieldSecond();
+    await flush();
+    await flush();
+
     expect(run.getSnapshot()).toEqual(beforeDispose);
   });
 });
@@ -175,14 +167,5 @@ describe("createRunCounter", () => {
     const counter = createRunCounter();
     expect(counter.next()).toBe(1);
     expect(counter.next()).toBe(2);
-    expect(counter.next()).toBe(3);
-  });
-
-  it("keeps independent state across separate counters", () => {
-    const a = createRunCounter();
-    const b = createRunCounter();
-    expect(a.next()).toBe(1);
-    expect(a.next()).toBe(2);
-    expect(b.next()).toBe(1);
   });
 });

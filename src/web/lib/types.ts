@@ -30,7 +30,7 @@ export interface Synthesis {
 
 export type SpecialistId = "engineer" | "product" | "ux" | "customer" | "skeptic";
 
-export type SpecialistStatus = "waiting" | "thinking" | "complete";
+export type SpecialistStatus = "waiting" | "thinking" | "complete" | "error";
 
 export interface SpecialistState {
   id: SpecialistId;
@@ -39,16 +39,23 @@ export interface SpecialistState {
   status: SpecialistStatus;
   durationMs: number | null;
   result: SpecialistView | null;
+  error: string | null;
 }
 
-export type SynthesisStatus = "idle" | "synthesizing" | "done";
+export type SynthesisStatus = "idle" | "synthesizing" | "done" | "error";
 
 export interface SynthesisState {
   status: SynthesisStatus;
   result: Synthesis | null;
+  error: string | null;
 }
 
-export type RunStatus = "running" | "synthesizing" | "done";
+/**
+ * `error` is reserved for a run that never got any specialist result at all
+ * (e.g. the server was unreachable) — a single failed specialist, or a
+ * failed synthesis after all five succeeded, does not set this.
+ */
+export type RunStatus = "running" | "synthesizing" | "done" | "error";
 
 export interface DeliberationSnapshot {
   runNumber: number;
@@ -56,4 +63,5 @@ export interface DeliberationSnapshot {
   status: RunStatus;
   specialists: SpecialistState[];
   synthesis: SynthesisState;
+  error: string | null;
 }

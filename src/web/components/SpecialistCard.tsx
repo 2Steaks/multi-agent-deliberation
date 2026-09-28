@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Stance, SpecialistState } from "../lib/types";
+import type { SpecialistId, Stance, SpecialistState } from "../lib/types";
 
 const STANCE_STYLES: Record<Stance, string> = {
   support: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
@@ -13,41 +13,51 @@ function formatDuration(ms: number): string {
 
 interface SpecialistCardProps {
   specialist: SpecialistState;
+  onRetry: (id: SpecialistId) => void;
 }
 
-export function SpecialistCard({ specialist }: SpecialistCardProps) {
+export function SpecialistCard({ specialist, onRetry }: SpecialistCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const canExpand = specialist.status === "complete";
 
   return (
     <div className="flex flex-col rounded-lg border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300">
-      <button
-        type="button"
-        onClick={() => canExpand && setExpanded((value) => !value)}
-        disabled={!canExpand}
-        aria-expanded={expanded}
-        className="flex w-full flex-col text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-default"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-zinc-900">{specialist.role}</span>
-          <StatusIndicator status={specialist.status} />
-        </div>
-        <p className="mt-0.5 text-xs text-zinc-500">{specialist.description}</p>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-zinc-900">{specialist.role}</span>
+        <StatusIndicator status={specialist.status} />
+      </div>
+      <p className="mt-0.5 text-xs text-zinc-500">{specialist.description}</p>
 
-        {specialist.status === "complete" && specialist.result && (
-          <>
-            <div className="mt-3 flex items-center gap-2">
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${STANCE_STYLES[specialist.result.stance]}`}
-              >
-                {specialist.result.stance}
-              </span>
-              <span className="text-xs text-zinc-500">{formatDuration(specialist.durationMs ?? 0)}</span>
-            </div>
-            <p className="mt-2 line-clamp-2 text-sm text-zinc-600">{specialist.result.keyPoints[0]}</p>
-          </>
-        )}
-      </button>
+      {specialist.status === "complete" && specialist.result && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="mt-3 flex w-full flex-col text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${STANCE_STYLES[specialist.result.stance]}`}
+            >
+              {specialist.result.stance}
+            </span>
+            <span className="text-xs text-zinc-500">{formatDuration(specialist.durationMs ?? 0)}</span>
+          </div>
+          <p className="mt-2 line-clamp-2 text-sm text-zinc-600">{specialist.result.keyPoints[0]}</p>
+        </button>
+      )}
+
+      {specialist.status === "error" && (
+        <div className="mt-3">
+          <p className="text-sm text-rose-600">{specialist.error ?? "This specialist failed to complete."}</p>
+          <button
+            type="button"
+            onClick={() => onRetry(specialist.id)}
+            className="mt-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {expanded && specialist.result && (
         <div className="mt-4 space-y-3 border-t border-zinc-100 pt-4 text-sm">
@@ -88,6 +98,9 @@ function StatusIndicator({ status }: { status: SpecialistState["status"] }) {
         Thinking...
       </span>
     );
+  }
+  if (status === "error") {
+    return <span className="text-xs font-medium text-rose-600">Error</span>;
   }
   return (
     <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">

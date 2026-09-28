@@ -7,11 +7,14 @@
     "dev": "mastra dev",
     "deliberate": "tsx --env-file=.env src/run.ts",
     "dev:ui": "vite",
+    "build": "mastra build",
+    "start": "mastra start",
     "build:ui": "vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {
+    "@mastra/client-js": "1.50.0",
     "@mastra/core": "latest",
     "@mastra/libsql": "^1.23.3",
     "@mastra/observability": "latest",

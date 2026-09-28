@@ -4,3 +4,10 @@ dist-web/
 .env
 .mastra/
 mastra.db*
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
